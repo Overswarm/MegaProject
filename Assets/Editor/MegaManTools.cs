@@ -40,6 +40,70 @@ namespace MB.EditorTools
             }
         }
 
+        [MenuItem("Tools/Mega Man/Validate Project", false, 3)]
+        static void Validate()
+        {
+            var report = new System.Text.StringBuilder();
+            bool ok = true;
+
+            // 1. physics layers from TagManager.asset
+            var expected = new (int index, string name)[]
+            {
+                (6, "Ground"), (7, "Player"), (8, "Enemy"), (9, "PlayerShot"),
+                (10, "EnemyShot"), (11, "Item"), (12, "Ladder"), (13, "Hazard"), (14, "Body"),
+            };
+            var missing = new System.Collections.Generic.List<string>();
+            foreach (var (index, name) in expected)
+                if (LayerMask.LayerToName(index) != name) missing.Add($"{index}={name}");
+            if (missing.Count == 0)
+                report.AppendLine("[OK] Physics layers 6-14 are set up.");
+            else
+            {
+                ok = false;
+                report.AppendLine("[FAIL] Missing layers: " + string.Join(", ", missing));
+                report.AppendLine("       TagManager.asset was not loaded as shipped. Re-add these");
+                report.AppendLine("       names at these indices in Project Settings > Tags and Layers.");
+            }
+
+            // 2. active input handler (0 = old only, 1 = new only, 2 = both)
+            var assets = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/ProjectSettings.asset");
+            var prop = assets.Length > 0
+                ? new SerializedObject(assets[0]).FindProperty("activeInputHandler") : null;
+            if (prop == null || prop.intValue == 0)
+            {
+                ok = false;
+                report.AppendLine("[FAIL] Active Input Handling excludes the Input System.");
+                report.AppendLine("       Run Tools > Mega Man > Fix Input Handler, then restart.");
+            }
+            else report.AppendLine($"[OK] Active Input Handling = {(prop.intValue == 2 ? "Both" : "Input System")}.");
+
+            // 3. scenes generated and in build settings
+            string[] scenes = { "Title", "StageSelect", "DemoStage" };
+            var inBuild = new System.Collections.Generic.HashSet<string>();
+            foreach (var s in EditorBuildSettings.scenes)
+                inBuild.Add(System.IO.Path.GetFileNameWithoutExtension(s.path));
+            foreach (var s in scenes)
+            {
+                bool exists = System.IO.File.Exists($"Assets/Scenes/{s}.unity");
+                if (exists && inBuild.Contains(s))
+                    report.AppendLine($"[OK] Scene {s} exists and is in Build Settings.");
+                else
+                {
+                    ok = false;
+                    report.AppendLine(exists
+                        ? $"[FAIL] Scene {s} is not in Build Settings."
+                        : $"[FAIL] Scene {s} has not been generated.");
+                }
+            }
+            if (!ok && !inBuild.Contains("Title"))
+                report.AppendLine("       Run Tools > Mega Man > Setup Project to fix scene issues.");
+
+            report.AppendLine(ok ? "\nAll good - open Assets/Scenes/Title.unity and press Play."
+                                 : "\nFix the items above, then validate again.");
+            EditorUtility.DisplayDialog("Mega Man - Validate Project", report.ToString(), "OK");
+            Debug.Log("[MegaMan Validate]\n" + report);
+        }
+
         // ---------- placement helpers ----------
 
         static Vector2 SpawnPos()
