@@ -1,0 +1,15 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!129 &1
+PlayerSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 28
+  productGUID: 5f34be1353de5cf4398729fda2385920
+  companyName: MegaProject
+  productName: MegaBot
+  defaultScreenWidth: 1280
+  defaultScreenHeight: 720
+  runInBackground: 1
+  fullscreenMode: 3
+  resizableWindow: 1
+  activeInputHandler: 2
