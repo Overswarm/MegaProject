@@ -14,6 +14,8 @@ namespace MB.EditorTools
 
         public static void BuildAll()
         {
+            UrpSetup.Ensure();
+
             if (!AssetDatabase.IsValidFolder(Dir))
                 AssetDatabase.CreateFolder("Assets", "Scenes");
 

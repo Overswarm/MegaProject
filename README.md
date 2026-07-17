@@ -7,9 +7,12 @@ auto-populated from the **Tools ▸ Mega Man** menu.
 
 ## Quick start
 
-1. Open the project in **Unity 6 LTS**. Let it import packages (Input System, uGUI, 2D Sprite).
+1. Open the project in **Unity 6 LTS**. Let it import packages (URP, Input System, uGUI, 2D Sprite).
 2. On first open you'll be prompted to generate the game scenes — click **Generate**.
    (Or run **Tools ▸ Mega Man ▸ Setup Project (Generate Scenes)** at any time.)
+   Setup also creates and activates the **URP 2D (Universal 2D)** render pipeline
+   (`Assets/Settings/`); sprites use unlit materials, so add a Global Light 2D and
+   Sprite-Lit materials only if you want 2D lighting later.
 3. Open `Assets/Scenes/Title.unity` and press **Play**.
 
 > If you see Input System errors on first launch, run

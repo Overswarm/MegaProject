@@ -77,7 +77,17 @@ namespace MB.EditorTools
             }
             else report.AppendLine($"[OK] Active Input Handling = {(prop.intValue == 2 ? "Both" : "Input System")}.");
 
-            // 3. scenes generated and in build settings
+            // 3. render pipeline
+            if (UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline != null)
+                report.AppendLine("[OK] URP 2D render pipeline is active.");
+            else
+            {
+                ok = false;
+                report.AppendLine("[FAIL] No render pipeline asset is assigned.");
+                report.AppendLine("       Run Tools > Mega Man > Setup URP 2D Pipeline.");
+            }
+
+            // 4. scenes generated and in build settings
             string[] scenes = { "Title", "StageSelect", "DemoStage" };
             var inBuild = new System.Collections.Generic.HashSet<string>();
             foreach (var s in EditorBuildSettings.scenes)
