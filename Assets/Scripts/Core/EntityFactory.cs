@@ -12,8 +12,21 @@ namespace MB
         {
             var go = new GameObject(name);
             go.transform.position = pos;
+            go.transform.localScale = Vector3.one;   // colliders assume unit scale
             go.layer = layer;
             return go;
+        }
+
+        /// Find-or-create an organizational root (Level / Enemies / Pickups /
+        /// Doodads) at the origin with identity scale. Parenting under these
+        /// is safe because they never move or scale.
+        public static Transform GetGroup(string name)
+        {
+            var go = GameObject.Find(name);
+            if (go == null) go = new GameObject(name);
+            go.transform.position = Vector3.zero;
+            go.transform.localScale = Vector3.one;
+            return go.transform;
         }
 
         static GameObject AddHitbox(GameObject root, Vector2 size, Vector2 offset)

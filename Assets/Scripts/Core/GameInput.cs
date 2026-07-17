@@ -6,6 +6,9 @@ namespace MB
     /// All input actions are defined in code so the project needs no .inputactions asset.
     /// Keyboard: WASD/arrows move, Space/Z jump, X/K fire, Q/E or [ ] weapon swap, Enter/Esc/P pause.
     /// Gamepad: dpad/stick move, south jump, west fire, shoulders weapon swap, start pause.
+    ///
+    /// Actions live in a proper InputActionMap with explicit control layouts, and
+    /// initialization is lazy / after scene load so devices are registered first.
     public static class GameInput
     {
         public static InputAction Move { get; private set; }
@@ -15,9 +18,10 @@ namespace MB
         public static InputAction WeaponNext { get; private set; }
         public static InputAction Pause { get; private set; }
 
+        static InputActionMap map;
         static bool _init;
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void AutoInit() { EnsureInit(); }
 
         public static void EnsureInit()
@@ -25,7 +29,9 @@ namespace MB
             if (_init) return;
             _init = true;
 
-            Move = new InputAction("Move", InputActionType.Value);
+            map = new InputActionMap("Gameplay");
+
+            Move = map.AddAction("Move", InputActionType.Value, expectedControlLayout: "Vector2");
             Move.AddCompositeBinding("2DVector")
                 .With("Up", "<Keyboard>/w").With("Down", "<Keyboard>/s")
                 .With("Left", "<Keyboard>/a").With("Right", "<Keyboard>/d");
@@ -35,37 +41,48 @@ namespace MB
             Move.AddBinding("<Gamepad>/dpad");
             Move.AddBinding("<Gamepad>/leftStick");
 
-            Jump = new InputAction("Jump", InputActionType.Button);
+            Jump = map.AddAction("Jump", InputActionType.Button, expectedControlLayout: "Button");
             Jump.AddBinding("<Keyboard>/space");
             Jump.AddBinding("<Keyboard>/z");
             Jump.AddBinding("<Gamepad>/buttonSouth");
 
-            Fire = new InputAction("Fire", InputActionType.Button);
+            Fire = map.AddAction("Fire", InputActionType.Button, expectedControlLayout: "Button");
             Fire.AddBinding("<Keyboard>/x");
             Fire.AddBinding("<Keyboard>/k");
             Fire.AddBinding("<Gamepad>/buttonWest");
 
-            WeaponPrev = new InputAction("WeaponPrev", InputActionType.Button);
+            WeaponPrev = map.AddAction("WeaponPrev", InputActionType.Button, expectedControlLayout: "Button");
             WeaponPrev.AddBinding("<Keyboard>/q");
             WeaponPrev.AddBinding("<Keyboard>/leftBracket");
             WeaponPrev.AddBinding("<Gamepad>/leftShoulder");
 
-            WeaponNext = new InputAction("WeaponNext", InputActionType.Button);
+            WeaponNext = map.AddAction("WeaponNext", InputActionType.Button, expectedControlLayout: "Button");
             WeaponNext.AddBinding("<Keyboard>/e");
             WeaponNext.AddBinding("<Keyboard>/rightBracket");
             WeaponNext.AddBinding("<Gamepad>/rightShoulder");
 
-            Pause = new InputAction("Pause", InputActionType.Button);
+            Pause = map.AddAction("Pause", InputActionType.Button, expectedControlLayout: "Button");
             Pause.AddBinding("<Keyboard>/enter");
             Pause.AddBinding("<Keyboard>/escape");
             Pause.AddBinding("<Keyboard>/p");
             Pause.AddBinding("<Gamepad>/start");
 
-            Move.Enable(); Jump.Enable(); Fire.Enable();
-            WeaponPrev.Enable(); WeaponNext.Enable(); Pause.Enable();
+            map.Enable();
         }
 
-        public static Vector2 MoveRaw { get { EnsureInit(); return Move.ReadValue<Vector2>(); } }
+        public static Vector2 MoveRaw
+        {
+            get
+            {
+                EnsureInit();
+                var v = Move.ReadValue<Vector2>();
+                // never let corrupt event data reach gameplay
+                if (float.IsNaN(v.x) || float.IsNaN(v.y) || float.IsInfinity(v.x) || float.IsInfinity(v.y))
+                    return Vector2.zero;
+                return v;
+            }
+        }
+
         public static int MoveX { get { var v = MoveRaw.x; return v > 0.4f ? 1 : v < -0.4f ? -1 : 0; } }
         public static int MoveY { get { var v = MoveRaw.y; return v > 0.4f ? 1 : v < -0.4f ? -1 : 0; } }
 

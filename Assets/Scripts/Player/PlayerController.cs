@@ -279,6 +279,14 @@ namespace MB
             SetFrozen(true);
             rb.simulated = false;
             Vector3 target = transform.position;
+
+            // land exactly on the ground surface below the spawn point, even if
+            // the spawn marker is slightly above or inside the floor
+            var ground = Physics2D.BoxCast((Vector2)target + Vector2.up * 1.5f,
+                new Vector2(box.size.x * 0.9f, 0.1f), 0f, Vector2.down, 6f, Layers.GroundMask);
+            if (ground.collider != null)
+                target.y = ground.point.y + 0.02f;
+
             transform.position = target + Vector3.up * 12f;
             if (visual != null) visual.overrideKey = "beam";
             Sfx.Play(SfxId.Teleport);
@@ -299,6 +307,7 @@ namespace MB
             }
             if (visual != null) visual.overrideKey = null;
             rb.simulated = true;
+            rb.linearVelocity = Vector2.zero;
             SetFrozen(false);
         }
 

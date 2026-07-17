@@ -23,6 +23,7 @@ namespace MB
         CameraFollow camFollow;
         PauseMenu pauseMenu;
         bool gameOverOpen;
+        bool fellLogged;
 
         void Awake()
         {
@@ -61,6 +62,20 @@ namespace MB
             if (GameInput.PausePressed && !CutsceneActive && !gameOverOpen &&
                 Player != null && PlayerHealth != null && !PlayerHealth.IsDead)
                 pauseMenu.Toggle(this);
+
+            // diagnostic: if the player ends up below the stage, log the full
+            // state once so falls are explainable from the console
+            if (!fellLogged && Player != null && PlayerHealth != null && !PlayerHealth.IsDead &&
+                Player.transform.position.y < stageBounds.yMin - 1f)
+            {
+                fellLogged = true;
+                var prb = Player.GetComponent<Rigidbody2D>();
+                Debug.LogWarning(
+                    $"[MegaMan] Player fell below the stage. pos={Player.transform.position}, " +
+                    $"vel={(prb != null ? prb.linearVelocity : Vector2.zero)}, state={Player.State}, " +
+                    $"grounded={Player.IsGrounded}, moveX={GameInput.MoveX}, moveY={GameInput.MoveY}, " +
+                    $"jumpHeld={GameInput.JumpHeld}");
+            }
         }
 
         IEnumerator SpawnRoutine()
@@ -73,6 +88,22 @@ namespace MB
             PlayerHealth = pgo.GetComponent<PlayerHealth>();
             camFollow.target = pgo.transform;
             camFollow.SnapTo(stageBounds);
+
+            // one-line sanity report so physics/setup problems are visible immediately
+            int groundColliders = 0, badScales = 0;
+            foreach (var col in Object.FindObjectsByType<Collider2D>(FindObjectsSortMode.None))
+            {
+                if (col.gameObject.layer == Layers.Ground && !col.isTrigger) groundColliders++;
+                if ((col.transform.lossyScale - Vector3.one).sqrMagnitude > 1e-6f) badScales++;
+            }
+            Debug.Log($"[MegaMan] Stage sanity: groundColliders={groundColliders}, " +
+                      $"playerVsGroundCollision={!Physics2D.GetIgnoreLayerCollision(Layers.Player, Layers.Ground)}, " +
+                      $"spawn={pos}, checkpoint={GameManager.I.CheckpointIndex}, " +
+                      $"scene={gameObject.scene.name}");
+            if (badScales > 0)
+                Debug.LogWarning($"[MegaMan] {badScales} collider object(s) have a non-unit transform scale. " +
+                                 "Colliders here are sized via component values, so scale must be (1,1,1). " +
+                                 "Run Tools > Mega Man > Fix Object Scales In Scene.");
 
             var canvas = UIBuilder.NewCanvas("ReadyCanvas", 20);
             var ready = UIBuilder.AddText(canvas.transform, "READY", 16,

@@ -25,6 +25,7 @@ namespace MB
         void Spawn()
         {
             current = EntityFactory.CreateEnemy(kind, transform.position, facing);
+            current.transform.SetParent(transform.parent, true);  // keep hierarchy tidy
             var e = current.GetComponent<EnemyBase>();
             if (e != null) e.onDeath += () => dead = true;
             dead = false;

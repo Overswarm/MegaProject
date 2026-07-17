@@ -12,4 +12,4 @@ PlayerSettings:
   runInBackground: 1
   fullscreenMode: 3
   resizableWindow: 1
-  activeInputHandler: 2
+  activeInputHandler: 1

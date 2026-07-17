@@ -33,11 +33,39 @@ namespace MB.EditorTools
             var prop = so.FindProperty("activeInputHandler");
             if (prop != null)
             {
-                prop.intValue = 2; // Both
+                // 1 = Input System Package only. 'Both' is known to cause
+                // InvalidCastException spam in the Input System's event processing.
+                prop.intValue = 1;
                 so.ApplyModifiedProperties();
                 EditorUtility.DisplayDialog("Mega Man",
-                    "Active Input Handling set to 'Both'. Restart the editor for it to take effect.", "OK");
+                    "Active Input Handling set to 'Input System Package (New)'. " +
+                    "Restart the editor for it to take effect.", "OK");
             }
+        }
+
+        [MenuItem("Tools/Mega Man/Fix Object Scales In Scene", false, 5)]
+        static void FixScales()
+        {
+            int count = 0;
+            foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
+            {
+                if (t.localScale == Vector3.one) continue;
+                bool gameplayObject = t.GetComponent<Collider2D>() != null ||
+                                      t.GetComponent<AutoSprite>() != null ||
+                                      t.GetComponent<EnemySpawner>() != null;
+                if (!gameplayObject) continue;
+                Undo.RecordObject(t, "Fix Scale");
+                t.localScale = Vector3.one;
+                count++;
+                EditorSceneManager.MarkSceneDirty(t.gameObject.scene);
+            }
+            EditorUtility.DisplayDialog("Mega Man - Fix Scales",
+                count == 0
+                    ? "All gameplay objects already have a scale of (1,1,1)."
+                    : $"Reset scale to (1,1,1) on {count} object(s).\n\n" +
+                      "Colliders and tiled sprites in this project are sized via " +
+                      "component values, so transform scale must stay at 1.",
+                "OK");
         }
 
         [MenuItem("Tools/Mega Man/Validate Project", false, 3)]
@@ -75,7 +103,12 @@ namespace MB.EditorTools
                 report.AppendLine("[FAIL] Active Input Handling excludes the Input System.");
                 report.AppendLine("       Run Tools > Mega Man > Fix Input Handler, then restart.");
             }
-            else report.AppendLine($"[OK] Active Input Handling = {(prop.intValue == 2 ? "Both" : "Input System")}.");
+            else if (prop.intValue == 2)
+            {
+                report.AppendLine("[WARN] Active Input Handling is 'Both' - known to cause");
+                report.AppendLine("       InvalidCastException spam. Run Fix Input Handler (sets New only).");
+            }
+            else report.AppendLine("[OK] Active Input Handling = Input System only.");
 
             // 3. render pipeline
             if (UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline != null)
@@ -87,7 +120,20 @@ namespace MB.EditorTools
                 report.AppendLine("       Run Tools > Mega Man > Setup URP 2D Pipeline.");
             }
 
-            // 4. scenes generated and in build settings
+            // 4. non-unit scales on physics objects in the OPEN scene
+            int scaled = 0;
+            foreach (var col in Object.FindObjectsByType<Collider2D>(FindObjectsSortMode.None))
+                if ((col.transform.lossyScale - Vector3.one).sqrMagnitude > 1e-6f) scaled++;
+            if (scaled == 0)
+                report.AppendLine("[OK] All colliders in the open scene are at scale (1,1,1).");
+            else
+            {
+                ok = false;
+                report.AppendLine($"[FAIL] {scaled} collider object(s) have a non-unit scale.");
+                report.AppendLine("       Run Tools > Mega Man > Fix Object Scales In Scene.");
+            }
+
+            // 5. scenes generated and in build settings
             string[] scenes = { "Title", "StageSelect", "DemoStage" };
             var inBuild = new System.Collections.Generic.HashSet<string>();
             foreach (var s in EditorBuildSettings.scenes)
@@ -124,8 +170,10 @@ namespace MB.EditorTools
             return new Vector2(Mathf.Round(p.x), Mathf.Round(p.y));
         }
 
-        static void Finish(GameObject go, string label)
+        static void Finish(GameObject go, string label, string group = null)
         {
+            if (group != null)
+                go.transform.SetParent(EntityFactory.GetGroup(group), true);
             Undo.RegisterCreatedObjectUndo(go, label);
             Selection.activeGameObject = go;
             EditorSceneManager.MarkSceneDirty(go.scene);
@@ -148,25 +196,25 @@ namespace MB.EditorTools
 
         [MenuItem("Tools/Mega Man/Create/Level/Platform Block (4x1)", false, 40)]
         static void CreateBlock() => Finish(EntityFactory.CreateBlock(
-            new Rect(SpawnPos(), new Vector2(4, 1)), new Color(0.72f, 0.72f, 0.8f)), "Block");
+            new Rect(SpawnPos(), new Vector2(4, 1)), new Color(0.72f, 0.72f, 0.8f)), "Block", "Level");
 
         [MenuItem("Tools/Mega Man/Create/Level/Ground Slab (8x3)", false, 41)]
         static void CreateSlab() => Finish(EntityFactory.CreateBlock(
-            new Rect(SpawnPos() - new Vector2(0, 3), new Vector2(8, 3)), new Color(0.72f, 0.72f, 0.8f)), "Ground");
+            new Rect(SpawnPos() - new Vector2(0, 3), new Vector2(8, 3)), new Color(0.72f, 0.72f, 0.8f)), "Ground", "Level");
 
         [MenuItem("Tools/Mega Man/Create/Level/Ladder (8 tall)", false, 42)]
         static void CreateLadder()
         {
             var p = SpawnPos();
-            Finish(EntityFactory.CreateLadder(p.x + 0.5f, p.y, 8f), "Ladder");
+            Finish(EntityFactory.CreateLadder(p.x + 0.5f, p.y, 8f), "Ladder", "Level");
         }
 
         [MenuItem("Tools/Mega Man/Create/Level/Spikes (3 wide)", false, 43)]
-        static void CreateSpikes() => Finish(EntityFactory.CreateSpikes(SpawnPos(), 3), "Spikes");
+        static void CreateSpikes() => Finish(EntityFactory.CreateSpikes(SpawnPos(), 3), "Spikes", "Level");
 
         [MenuItem("Tools/Mega Man/Create/Level/Kill Zone (pit, 8 wide)", false, 44)]
         static void CreateKillZone() => Finish(EntityFactory.CreateKillZone(
-            new Rect(SpawnPos() - new Vector2(4, 1), new Vector2(8, 2))), "Kill Zone");
+            new Rect(SpawnPos() - new Vector2(4, 1), new Vector2(8, 2))), "Kill Zone", "Level");
 
         [MenuItem("Tools/Mega Man/Create/Level/Checkpoint", false, 45)]
         static void CreateCheckpoint()
@@ -174,11 +222,11 @@ namespace MB.EditorTools
             int next = 1;
             foreach (var c in Object.FindObjectsByType<Checkpoint>(FindObjectsSortMode.None))
                 next = Mathf.Max(next, c.index + 1);
-            Finish(EntityFactory.CreateCheckpoint(SpawnPos(), next), "Checkpoint");
+            Finish(EntityFactory.CreateCheckpoint(SpawnPos(), next), "Checkpoint", "Level");
         }
 
         [MenuItem("Tools/Mega Man/Create/Level/Boss Door", false, 46)]
-        static void CreateDoor() => Finish(EntityFactory.CreateBossDoor(SpawnPos(), false), "Boss Door");
+        static void CreateDoor() => Finish(EntityFactory.CreateBossDoor(SpawnPos(), false), "Boss Door", "Level");
 
         [MenuItem("Tools/Mega Man/Create/Level/Boss Door (Final, opens boss room)", false, 47)]
         static void CreateFinalDoor()
@@ -186,45 +234,56 @@ namespace MB.EditorTools
             var go = EntityFactory.CreateBossDoor(SpawnPos(), true);
             var door = go.GetComponent<BossDoor>();
             door.roomBounds = new Rect(SpawnPos().x + 1, SpawnPos().y, 16, 12);
-            Finish(go, "Boss Door (Final)");
+            Finish(go, "Boss Door (Final)", "Level");
             Debug.Log("Final boss door created. Set its Room Bounds and drag the Boss reference in the Inspector.");
+        }
+
+        [MenuItem("Tools/Mega Man/Create/Organization Groups", false, 48)]
+        static void CreateGroups()
+        {
+            EntityFactory.GetGroup("Level");
+            EntityFactory.GetGroup("Enemies");
+            EntityFactory.GetGroup("Pickups");
+            var doodads = EntityFactory.GetGroup("Doodads");
+            Selection.activeGameObject = doodads.gameObject;
+            EditorSceneManager.MarkSceneDirty(doodads.gameObject.scene);
         }
 
         // ---------- enemies ----------
 
         [MenuItem("Tools/Mega Man/Create/Enemies/Met Spawner", false, 60)]
-        static void CreateMet() => Finish(EntityFactory.CreateSpawner(EnemyKind.Met, SpawnPos(), -1), "Met");
+        static void CreateMet() => Finish(EntityFactory.CreateSpawner(EnemyKind.Met, SpawnPos(), -1), "Met", "Enemies");
 
         [MenuItem("Tools/Mega Man/Create/Enemies/Walker Spawner", false, 61)]
-        static void CreateWalker() => Finish(EntityFactory.CreateSpawner(EnemyKind.Walker, SpawnPos(), -1), "Walker");
+        static void CreateWalker() => Finish(EntityFactory.CreateSpawner(EnemyKind.Walker, SpawnPos(), -1), "Walker", "Enemies");
 
         [MenuItem("Tools/Mega Man/Create/Enemies/Flyer Spawner", false, 62)]
-        static void CreateFlyer() => Finish(EntityFactory.CreateSpawner(EnemyKind.Flyer, SpawnPos(), -1), "Flyer");
+        static void CreateFlyer() => Finish(EntityFactory.CreateSpawner(EnemyKind.Flyer, SpawnPos(), -1), "Flyer", "Enemies");
 
         [MenuItem("Tools/Mega Man/Create/Enemies/Boss", false, 63)]
-        static void CreateBoss() => Finish(EntityFactory.CreateBoss(SpawnPos()), "Boss");
+        static void CreateBoss() => Finish(EntityFactory.CreateBoss(SpawnPos()), "Boss", "Enemies");
 
         // ---------- items ----------
 
         [MenuItem("Tools/Mega Man/Create/Items/E-Tank", false, 80)]
-        static void CreateETank() => Finish(EntityFactory.CreatePickup(PickupType.ETank, SpawnPos(), false), "E-Tank");
+        static void CreateETank() => Finish(EntityFactory.CreatePickup(PickupType.ETank, SpawnPos(), false), "E-Tank", "Pickups");
 
         [MenuItem("Tools/Mega Man/Create/Items/W-Tank", false, 81)]
-        static void CreateWTank() => Finish(EntityFactory.CreatePickup(PickupType.WTank, SpawnPos(), false), "W-Tank");
+        static void CreateWTank() => Finish(EntityFactory.CreatePickup(PickupType.WTank, SpawnPos(), false), "W-Tank", "Pickups");
 
         [MenuItem("Tools/Mega Man/Create/Items/Health (Small)", false, 82)]
-        static void CreateHpS() => Finish(EntityFactory.CreatePickup(PickupType.HealthSmall, SpawnPos(), false), "Health");
+        static void CreateHpS() => Finish(EntityFactory.CreatePickup(PickupType.HealthSmall, SpawnPos(), false), "Health", "Pickups");
 
         [MenuItem("Tools/Mega Man/Create/Items/Health (Large)", false, 83)]
-        static void CreateHpL() => Finish(EntityFactory.CreatePickup(PickupType.HealthLarge, SpawnPos(), false), "Health");
+        static void CreateHpL() => Finish(EntityFactory.CreatePickup(PickupType.HealthLarge, SpawnPos(), false), "Health", "Pickups");
 
         [MenuItem("Tools/Mega Man/Create/Items/Weapon Energy (Small)", false, 84)]
-        static void CreateEnS() => Finish(EntityFactory.CreatePickup(PickupType.EnergySmall, SpawnPos(), false), "Energy");
+        static void CreateEnS() => Finish(EntityFactory.CreatePickup(PickupType.EnergySmall, SpawnPos(), false), "Energy", "Pickups");
 
         [MenuItem("Tools/Mega Man/Create/Items/Weapon Energy (Large)", false, 85)]
-        static void CreateEnL() => Finish(EntityFactory.CreatePickup(PickupType.EnergyLarge, SpawnPos(), false), "Energy");
+        static void CreateEnL() => Finish(EntityFactory.CreatePickup(PickupType.EnergyLarge, SpawnPos(), false), "Energy", "Pickups");
 
         [MenuItem("Tools/Mega Man/Create/Items/1-Up", false, 86)]
-        static void CreateOneUp() => Finish(EntityFactory.CreatePickup(PickupType.OneUp, SpawnPos(), false), "1-Up");
+        static void CreateOneUp() => Finish(EntityFactory.CreatePickup(PickupType.OneUp, SpawnPos(), false), "1-Up", "Pickups");
     }
 }

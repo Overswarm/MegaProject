@@ -9,9 +9,17 @@ namespace MB.EditorTools
     ///   Zone 3 (upper path):   spike gap, mandatory slide corridor, E-Tank ledge, 1-Up
     ///   Zone 4 (descent):      cliff back to ground (checkpoint 2)
     ///   Boss:                  double shutter doors, corridor, boss room
+    ///
+    /// Everything is parented under organizational empties at the origin:
+    ///   Level    - terrain, hazards, ladders, checkpoints, boss doors
+    ///   Enemies  - enemy spawners and the boss
+    ///   Pickups  - tanks, pellets, 1-ups
+    ///   Doodads  - non-interactive background decoration (empty for now)
     public static class DemoStageLayout
     {
         static readonly Color BlockTint = new Color(0.72f, 0.72f, 0.80f);
+
+        static Transform level, enemies, pickups;
 
         public static void Populate()
         {
@@ -19,6 +27,11 @@ namespace MB.EditorTools
             //      final door pans it into the boss room ----
             EntityFactory.CreateStageEssentials(new Rect(-2, -3, 94, 23),
                 new Color(0.35f, 0.4f, 0.55f));
+
+            level = EntityFactory.GetGroup("Level");
+            enemies = EntityFactory.GetGroup("Enemies");
+            pickups = EntityFactory.GetGroup("Pickups");
+            EntityFactory.GetGroup("Doodads");
 
             // ---- terrain ----
             Block(-3, -3, 1, 21, "WallLeft");
@@ -41,14 +54,14 @@ namespace MB.EditorTools
             Block(108, 0, 3, 11, "WallRight");
 
             // ---- hazards ----
-            EntityFactory.CreateSpikes(new Vector2(52, 4), 3);
-            EntityFactory.CreateKillZone(new Rect(-4, -9, 118, 2));
+            InLevel(EntityFactory.CreateSpikes(new Vector2(52, 4), 3));
+            InLevel(EntityFactory.CreateKillZone(new Rect(-4, -9, 118, 2)));
 
             // ---- ladder + checkpoints ----
-            EntityFactory.CreateLadder(41.5f, 0f, 8f);
-            EntityFactory.CreateCheckpoint(new Vector2(2, 0), 0);     // spawn
-            EntityFactory.CreateCheckpoint(new Vector2(44, 8), 1);    // top of ladder
-            EntityFactory.CreateCheckpoint(new Vector2(74, 0), 2);    // before boss
+            InLevel(EntityFactory.CreateLadder(41.5f, 0f, 8f));
+            InLevel(EntityFactory.CreateCheckpoint(new Vector2(2, 0), 0));     // spawn
+            InLevel(EntityFactory.CreateCheckpoint(new Vector2(44, 8), 1));    // top of ladder
+            InLevel(EntityFactory.CreateCheckpoint(new Vector2(74, 0), 2));    // before boss
 
             // ---- enemies (spawners respawn them NES-style) ----
             Spawn(EnemyKind.Met, 8, 0);
@@ -70,27 +83,33 @@ namespace MB.EditorTools
             Item(PickupType.EnergyLarge, 88, 0);      // boss corridor
 
             // ---- boss ----
-            EntityFactory.CreateBossDoor(new Vector2(84, 0), false);
-            var finalDoor = EntityFactory.CreateBossDoor(new Vector2(91, 0), true)
-                .GetComponent<BossDoor>();
+            InLevel(EntityFactory.CreateBossDoor(new Vector2(84, 0), false));
+            var finalDoorGo = EntityFactory.CreateBossDoor(new Vector2(91, 0), true);
+            InLevel(finalDoorGo);
+            var finalDoor = finalDoorGo.GetComponent<BossDoor>();
             finalDoor.roomBounds = new Rect(92, 0, 16, 12);
             var boss = EntityFactory.CreateBoss(new Vector2(100, 0));
+            boss.transform.SetParent(enemies, true);
             finalDoor.boss = boss.GetComponent<BossController>();
         }
 
         static void Block(float x, float y, float w, float h, string name)
         {
-            EntityFactory.CreateBlock(new Rect(x, y, w, h), BlockTint, name);
+            InLevel(EntityFactory.CreateBlock(new Rect(x, y, w, h), BlockTint, name));
         }
 
         static void Spawn(EnemyKind kind, float x, float y)
         {
-            EntityFactory.CreateSpawner(kind, new Vector2(x, y), -1);
+            EntityFactory.CreateSpawner(kind, new Vector2(x, y), -1)
+                .transform.SetParent(enemies, true);
         }
 
         static void Item(PickupType type, float x, float y)
         {
-            EntityFactory.CreatePickup(type, new Vector2(x, y), false);
+            EntityFactory.CreatePickup(type, new Vector2(x, y), false)
+                .transform.SetParent(pickups, true);
         }
+
+        static void InLevel(GameObject go) => go.transform.SetParent(level, true);
     }
 }
